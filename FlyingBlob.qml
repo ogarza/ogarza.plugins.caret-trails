@@ -22,7 +22,7 @@ ShaderEffect {
     fragmentShader: "shaders/blob.frag.qsb"
     blending: true
 
-    readonly property real hopDist: 22
+    readonly property real hopDist: 10
 
     property real goalX: -100
     property real goalY: -100
