@@ -34,6 +34,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions are
 
 ### Changed
 
+- **Trail visuals**: rebuilt as two layers — a single persistent glowing
+  particle that perpetually chases the live caret (quick focus changes redirect
+  it mid-flight rather than spawning duplicates; it banks into turns and
+  vanishes the instant it lands), plus afterimage streaks emitted as
+  breadcrumbs along the particle's *actual* trajectory, so the trail follows
+  every course change; each streak fades and fully retracts in 240 ms.
+  Replaces the earlier straight connector line and per-hop particles.
+- **Staircase strokes eliminated**: caret moves used to be evaluated once per
+  changed coordinate (QML assignments are synchronous), producing axis-aligned
+  horizontal/vertical fragments on every diagonal move. Updates are now batched
+  into one evaluation per socket message, and spawns accumulate ~22 px of
+  travel (slow movement flushed on a 110 ms timer).
 - Install flow: `hyprpm.toml` now carries a real commit pin (Hyprland 0.56.2 →
   plugin commit) instead of a placeholder that made `hyprpm add` fail with
   `bad commit pin`; `scripts/install.sh` runs `hyprpm update` before

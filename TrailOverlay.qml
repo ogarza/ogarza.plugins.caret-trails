@@ -10,9 +10,22 @@ Item {
     readonly property int cullMargin: 48
 
     property var windows: []
+    property var blobs: []
     property int activeCount: 0
     property int maxActive: 48
 
+    // Redirect the persistent blob(s) toward a global caret position.
+    function redirect(gx, gy, active) {
+        for (let i = 0; i < blobs.length; i++) {
+            const b = blobs[i]
+            const w = windows[i]
+            if (!b || !w)
+                continue
+            b.setGoal(gx - w.screen.x, gy - w.screen.y, active)
+        }
+    }
+
+    // spawn a lingering afterimage streak between two global points
     function spawn(ax, ay, bx, by) {
         if (activeCount >= maxActive)
             return
@@ -45,6 +58,12 @@ Item {
         }
     }
 
+    Component {
+        id: blobComponent
+
+        FlyingBlob {}
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -67,11 +86,24 @@ Item {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "ogarza-caret-trails"
 
-            Component.onCompleted: root.windows.push(win)
+            Component.onCompleted: {
+                root.windows.push(win)
+                const b = blobComponent.createObject(win.contentItem)
+                if (b) {
+                    // afterimage streaks trace the blob's real trajectory
+                    b.hop.connect(function(x1, y1, x2, y2) {
+                        root.spawn(x1 + win.screen.x, y1 + win.screen.y,
+                                   x2 + win.screen.x, y2 + win.screen.y)
+                    })
+                    root.blobs.push(b)
+                }
+            }
             Component.onDestruction: {
                 const i = root.windows.indexOf(win)
-                if (i >= 0)
+                if (i >= 0) {
                     root.windows.splice(i, 1)
+                    root.blobs.splice(i, 1)
+                }
             }
         }
     }

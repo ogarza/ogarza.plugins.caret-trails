@@ -27,40 +27,19 @@ Item {
     readonly property string socketPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/caret-trails.sock`
     readonly property int protocolVersionSupported: 1
 
-    property point lastTrailPoint: Qt.point(0, 0)
-    property bool hasTrailPoint: false
-    property real lastSpawnTime: 0
-
+    // The persistent blob chases the live caret and emits breadcrumbs along
+    // its real trajectory; TrailOverlay turns those into afterimage streaks.
+    // noteCaretMove is called once per complete socket update — never from
+    // individual x/y property change handlers, which would evaluate mid-update.
     function noteCaretMove() {
         if (!healthy || !caretActive) {
-            hasTrailPoint = false
+            trails.redirect(caretX, caretY, false)
             return
         }
 
-        const px = emitterX
-        const py = emitterY
-        const now = Date.now()
-
-        if (!hasTrailPoint) {
-            lastTrailPoint = Qt.point(px, py)
-            hasTrailPoint = true
-            lastSpawnTime = now
-            return
-        }
-
-        const dx = px - lastTrailPoint.x
-        const dy = py - lastTrailPoint.y
-        const dist = Math.sqrt(dx * dx + dy * dy)
-
-        if (dist >= 4 || (dist >= 1 && now - lastSpawnTime >= 200)) {
-            trails.spawn(lastTrailPoint.x, lastTrailPoint.y, px, py)
-            lastTrailPoint = Qt.point(px, py)
-            lastSpawnTime = now
-        }
+        trails.redirect(emitterX, emitterY, true)
     }
 
-    onEmitterXChanged: noteCaretMove()
-    onEmitterYChanged: noteCaretMove()
     onHealthyChanged: noteCaretMove()
 
     TrailOverlay {

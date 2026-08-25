@@ -22,12 +22,17 @@ Components:
 - `CaretTrail.qml` — Omarchy shell overlay that consumes the socket and exposes
   `status`, `caretActive`, `caretX/Y/Width/Height`, and ready-made emitter
   coordinates (`emitterX`, `emitterY`) as QML properties.
-- `TrailOverlay.qml` + `TrailSegment.qml` + `shaders/trail.frag(.qsb)` — the
-  visual effect: a glowing line is drawn from the previous caret position to
-  the new one whenever the caret moves, then fades out over exactly one second.
+- `TrailOverlay.qml` + `FlyingBlob.qml` + `TrailSegment.qml` +
+  `shaders/blob.frag(.qsb)` + `shaders/streak.frag(.qsb)` — the visual effect,
+  in two layers. A single persistent glowing particle (`FlyingBlob`) perpetually
+  chases the live caret position with exponential deceleration — because it is
+  one object with a moving goal, quick focus changes redirect it mid-flight
+  instead of spawning duplicates; it banks into turns, swells on arrival, and
+  fades out when text focus is lost. Behind it, every ~22 px of accumulated
+  travel spawns a short lingering afterimage streak (`TrailSegment`,
+  ~22–30% of the hop distance) that fades and fully retracts over 700 ms.
   Each screen hosts a transparent, click-through layer-shell overlay
-  (`WlrLayer.Overlay`, empty input mask); segments are bounding-box-sized
-  `ShaderEffect`s running the GLSL trail shader.
+  (`WlrLayer.Overlay`, empty input mask).
 
 ## Install (Omarchy)
 
@@ -149,11 +154,14 @@ Quickshell side (`shaders/`), consuming the properties above.
 
 | Knob | Where | Default |
 |---|---|---|
-| trail color | `TrailSegment.qml` `tint` (vector3d) | sky blue `(0.22, 0.74, 0.97)` |
-| lifetime | fade animation `duration` in `TrailSegment.qml` | `1000` ms |
-| glow/width/pulse shape | `shaders/trail.frag` | core ~3 px + exponential glow |
-| spawn sensitivity | `CaretTrail.qml` `noteCaretMove()` thresholds | 4 px, or 200 ms / 1 px |
-| max concurrent trails | `TrailOverlay.qml` `maxActive` | 48 |
+| trail color | `tint` (vector3d) in `FlyingBlob.qml` / `TrailSegment.qml` | sky blue `(0.22, 0.74, 0.97)` |
+| blob speed | chase rate in `FlyingBlob.qml` timer (`dt * 13`) | ~95% of the gap closed in ~230 ms |
+| blob linger | none — vanishes the instant it lands | — |
+| blob size | `radii` in `FlyingBlob.qml` | 9.5 × 3.2 px capsule |
+| streak cadence | `hopDist` in `FlyingBlob.qml` | one afterimage per 22 px of the blob's actual path |
+| streak length | `k` in `TrailSegment.qml` `setup()` | 22–30% of each hop |
+| streak lifetime | fade animation `duration` in `TrailSegment.qml` | `240` ms |
+| max concurrent streaks | `TrailOverlay.qml` `maxActive` | 48 |
 
 Qt 6 `ShaderEffect` cannot take inline GLSL — shaders are authored in
 Vulkan-style GLSL (`shaders/trail.frag`) and compiled to `.qsb` with the
