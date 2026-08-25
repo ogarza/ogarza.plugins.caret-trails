@@ -851,3 +851,46 @@ reads root `hyprpm.toml` whose build commands descend into `hyprland-plugin/`.
 7. End-to-end test: `hyprpm enable` -> `socat - UNIX-CONNECT:...sock` -> type in
    Firefox/GTK/Qt apps -> watch JSON lines flip active/x/y; switch windows and
    confirm an `{"active":false}` transition appears when leaving text fields.
+
+## A13. Trail shader findings (added 2026-08-25, second iteration)
+
+The 1-second fading trail line IS now implemented (v0.2). Facts to remember:
+
+- **Qt 6 ShaderEffect accepts ONLY `.qsb` files** - no inline GLSL strings
+  (confirmed in Qt 6.11 docs). Workflow: author Vulkan-style GLSL
+  (`shaders/trail.frag`, `#version 440`) -> `/usr/lib/qt6/bin/qsb shaders/trail.frag -o shaders/trail.frag.qsb`
+  (qsb comes from `qt6-shadertools` and is NOT on PATH) -> commit BOTH files;
+  QML references the `.qsb` with a path relative to its own file.
+- Fragment-only effects receive `vec2 qt_TexCoord0` at location 0 from the
+  built-in vertex shader (declare input with that exact name).
+- Uniform block rules: `layout(std140, binding = 0) uniform buf { mat4 qt_Matrix;
+  float qt_Opacity; <customs...> };` - qt_Matrix/qt_Opacity first even when
+  unused; custom uniforms after; samplers would use binding >= 1.
+- Output must be premultiplied (`fragColor = vec4(col * a, a)`), blending on.
+- Property-type mapping must match exactly: vector2d->vec2, real->float,
+  vector3d->vec3; `color` maps to PREMULTIPLIED vec4, so use `vector3d` for
+  vec3 uniforms.
+- Overlay window pattern verified against Omarchy's own shell
+  (`/usr/share/omarchy/shell/plugins/background/Background.qml`,
+  `Ui/KeyboardPanel.qml`, `Ui/SpeedTestOverlay.qml`):
+  `Variants { model: Quickshell.screens; PanelWindow { required property var
+  modelData; screen: modelData; anchors all; color: "transparent";
+  mask: Region {}; exclusionMode: ExclusionMode.Ignore;
+  WlrLayershell.layer: WlrLayer.Overlay } }` with `import Quickshell.Wayland`.
+  Empty `Region {}` mask = fully click-through. `QsWindow.contentItem` exists
+  for reparenting spawned items; `ShellScreen` has x/y/width/height for
+  global->local conversion.
+- Trail architecture: `CaretTrail.noteCaretMove()` spawns a segment when the
+  emitter point moved >=4px (or >=1px after 200ms); `TrailSegment.setup()`
+  positions a bounding-box-sized ShaderEffect around the line (margin 40px);
+  one `NumberAnimation` drives `progress` 0->1 over 1000ms then destroys the
+  item (= disappears after 1 second); `TrailOverlay.spawn()` duplicates the
+  segment into each screen window with global->local conversion + culling so
+  multi-monitor crossings render everywhere; `maxActive: 48` caps load.
+- Tuning knobs: color `TrailSegment.tint`, lifetime = animation duration,
+  glow/width in `shaders/trail.frag`, thresholds in `noteCaretMove()`,
+  cap in `TrailOverlay.maxActive`.
+- Validation without launching UI: `/usr/lib/qt6/bin/qsb` compiles the GLSL
+  (catches syntax/layout errors); `qmllint -I /usr/lib/qt6/qml <files>` catches
+  QML/type errors. Visual test happens automatically via omarchy-shell plugin
+  hot-reload when files are saved under ~/.config/omarchy/plugins/.

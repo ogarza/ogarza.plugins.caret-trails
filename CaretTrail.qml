@@ -27,6 +27,47 @@ Item {
     readonly property string socketPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/caret-trails.sock`
     readonly property int protocolVersionSupported: 1
 
+    property point lastTrailPoint: Qt.point(0, 0)
+    property bool hasTrailPoint: false
+    property real lastSpawnTime: 0
+
+    function noteCaretMove() {
+        if (!healthy || !caretActive) {
+            hasTrailPoint = false
+            return
+        }
+
+        const px = emitterX
+        const py = emitterY
+        const now = Date.now()
+
+        if (!hasTrailPoint) {
+            lastTrailPoint = Qt.point(px, py)
+            hasTrailPoint = true
+            lastSpawnTime = now
+            return
+        }
+
+        const dx = px - lastTrailPoint.x
+        const dy = py - lastTrailPoint.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+
+        if (dist >= 4 || (dist >= 1 && now - lastSpawnTime >= 200)) {
+            trails.spawn(lastTrailPoint.x, lastTrailPoint.y, px, py)
+            lastTrailPoint = Qt.point(px, py)
+            lastSpawnTime = now
+        }
+    }
+
+    onEmitterXChanged: noteCaretMove()
+    onEmitterYChanged: noteCaretMove()
+    onHealthyChanged: noteCaretMove()
+
+    TrailOverlay {
+        id: trails
+        trail: root
+    }
+
     function handleMessage(line) {
         let msg;
         try {
@@ -56,6 +97,7 @@ Item {
             caretWidth = msg.width;
             caretHeight = msg.height;
         }
+        noteCaretMove();
     }
 
     Timer {

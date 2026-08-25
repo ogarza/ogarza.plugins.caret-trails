@@ -22,11 +22,34 @@ Components:
 - `CaretTrail.qml` — Omarchy shell overlay that consumes the socket and exposes
   `status`, `caretActive`, `caretX/Y/Width/Height`, and ready-made emitter
   coordinates (`emitterX`, `emitterY`) as QML properties.
+- `TrailOverlay.qml` + `TrailSegment.qml` + `shaders/trail.frag(.qsb)` — the
+  visual effect: a glowing line is drawn from the previous caret position to
+  the new one whenever the caret moves, then fades out over exactly one second.
+  Each screen hosts a transparent, click-through layer-shell overlay
+  (`WlrLayer.Overlay`, empty input mask); segments are bounding-box-sized
+  `ShaderEffect`s running the GLSL trail shader.
 
 ## Install (Omarchy)
 
-Requirements: `base-devel`, `cmake`, Hyprland >= 0.56 (headers come with the
-package), quickshell.
+### Dependencies
+
+| Package | Why | Preinstalled on Omarchy? |
+|---|---|---|
+| `hyprland` >= 0.56 | compositor, plugin headers, `pkg-config` file, and `hyprpm` all ship with this package | yes |
+| `quickshell` | runs the shell overlay + trail effect | yes |
+| `base-devel` | C++ toolchain (`g++`, `make`, etc.) used to build the native plugin | yes |
+| `cmake` | configures the plugin build (`hyprpm.toml` build steps use it) | **no — must be installed** |
+| `git` | `omarchy plugin add` / `hyprpm add` clone this repo | yes |
+| `socat` *(optional)* | watch the live caret stream for debugging | usually present |
+
+Install anything missing with:
+
+```bash
+omarchy pkg add cmake
+```
+
+(Verified on a stock Omarchy system 2026-08-25: only `cmake` was missing;
+everything else above ships with the base install.)
 
 ```bash
 # 1) Shell side (overlay + receiver)
@@ -83,5 +106,26 @@ terminals vary (see DESIGN.md §7 for details and confidence levels).
 
 ## Status
 
-Pipeline stage complete; GLSL particle simulation is next and lives entirely on
-the Quickshell side (`shaders/`), consuming the properties above.
+Position pipeline complete, plus a first visual: the 1-second fading trail
+line. The full GLSL particle simulation is next and lives entirely on the
+Quickshell side (`shaders/`), consuming the properties above.
+
+### Trail tuning
+
+| Knob | Where | Default |
+|---|---|---|
+| trail color | `TrailSegment.qml` `tint` (vector3d) | sky blue `(0.22, 0.74, 0.97)` |
+| lifetime | fade animation `duration` in `TrailSegment.qml` | `1000` ms |
+| glow/width/pulse shape | `shaders/trail.frag` | core ~3 px + exponential glow |
+| spawn sensitivity | `CaretTrail.qml` `noteCaretMove()` thresholds | 4 px, or 200 ms / 1 px |
+| max concurrent trails | `TrailOverlay.qml` `maxActive` | 48 |
+
+Qt 6 `ShaderEffect` cannot take inline GLSL — shaders are authored in
+Vulkan-style GLSL (`shaders/trail.frag`) and compiled to `.qsb` with the
+`qsb` tool from `qt6-shadertools`. The compiled `.qsb` is committed, so this
+package is only needed when editing shaders; after changing the `.frag`,
+regenerate it:
+
+```bash
+/usr/lib/qt6/bin/qsb shaders/trail.frag -o shaders/trail.frag.qsb
+```

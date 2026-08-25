@@ -249,7 +249,11 @@ ogarza.plugins.caret-trails/
 ├── manifest.json            Omarchy shell plugin manifest (kinds: overlay)
 ├── hyprpm.toml              hyprpm repository manifest at repo ROOT (required)
 ├── CaretTrail.qml           overlay entry point: unix-socket receiver -> QML props
-├── shaders/                 reserved for the future GLSL particle pass
+├── TrailOverlay.qml         per-screen transparent overlay + segment spawning
+├── TrailSegment.qml         one trail line: bbox-sized ShaderEffect, 1 s fade
+├── shaders/
+│   ├── trail.frag           GLSL source (Vulkan-style, authored by humans)
+│   └── trail.frag.qsb       compiled artifact consumed by Qt (committed)
 ├── hyprland-plugin/
 │   ├── CMakeLists.txt       pkg-config "hyprland" based, mirrors upstream plugins
 │   └── src/main.cpp         the entire native sensor (~250 lines)
@@ -262,4 +266,44 @@ Two manifests, one repo: Omarchy discovers the shell side via `manifest.json`;
 `hyprpm add <repo-url>` requires `hyprpm.toml` at the repository root, whose
 build commands descend into `hyprland-plugin/`. Both tools can therefore target
 the same Git URL.
+
+## 9. Trail shader implementation (v0.2)
+
+Qt 6 (6.11 here) `ShaderEffect` **only accepts compiled `.qsb` shader files** -
+inline GLSL strings from the Qt 5 era are no longer supported. Pipeline:
+author Vulkan-style GLSL (`shaders/trail.frag`, `#version 440`) -> compile with
+`qsb` (`qt6-shadertools`, on this machine at `/usr/lib/qt6/bin/qsb`, not on
+PATH) -> commit both; QML references the `.qsb` relative to its own file.
+
+Verified Qt 6 ShaderEffect rules honored by `trail.frag`:
+
+- fragment-only effect: built-in vertex shader feeds `vec2 qt_TexCoord0`
+  at location 0 (same name declared in the fragment input).
+- uniform block must be `layout(std140, binding = 0)` and begin with
+  `mat4 qt_Matrix` (offset 0) and `float qt_Opacity` (offset 64) even if
+  unused, then custom uniforms: `resolution/p0/p1/progress/tint`.
+- output must be premultiplied alpha (`rgb *= a`) for source-over blending.
+- QML property <-> uniform type mapping must match exactly: `vector2d`->vec2,
+  `real`->float, `vector3d`->vec3. Note `color` maps to *premultiplied vec4*,
+  so a vec3 uniform takes a `vector3d` property.
+
+Rendering architecture:
+
+- one transparent click-through `PanelWindow` per screen (`Variants` over
+  `Quickshell.screens`; pattern copied from Omarchy's own shell): all anchors,
+  `color: "transparent"`, empty `mask: Region {}` (no input region),
+  `exclusionMode: ExclusionMode.Ignore`, `WlrLayershell.layer: WlrLayer.Overlay`,
+  namespace `ogarza-caret-trails`, visible only while the sensor is healthy.
+- `CaretTrail.qml` watches the emitter point (caret bottom-center) and spawns a
+  segment when it moved >= 4 px (or >= 1 px after 200 ms), keeping the previous
+  point as segment start - rapid caret motion therefore produces a continuous
+  comet trail of overlapping fading segments.
+- each `TrailSegment` is a bounding-box-sized (not fullscreen) `ShaderEffect`
+  positioned around its line, running the SDF capsule shader: ~3 px antialiased
+  core + exponential glow + an eased head pulse traveling p0->p1; a single
+  `NumberAnimation` drives `progress` 0..1 over 1000 ms and destroys the item,
+  which is the "disappears after 1 second" behavior.
+- segments are converted global -> per-screen local coordinates and culled per
+  window, so trails crossing monitor boundaries render correctly on both
+  screens; `maxActive` caps runaway spawn rates.
 
