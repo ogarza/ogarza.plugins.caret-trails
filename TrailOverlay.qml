@@ -41,7 +41,7 @@ Item {
         id: segComponent
 
         TrailSegment {
-            onDestroyed: root.activeCount--
+            Component.onDestruction: root.activeCount--
         }
     }
 

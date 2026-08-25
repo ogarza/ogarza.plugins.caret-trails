@@ -7,6 +7,8 @@ ShaderEffect {
 
     property vector2d p0
     property vector2d p1
+    // feeds the `resolution` uniform in trail.frag; pixel size of this quad
+    readonly property vector2d resolution: Qt.vector2d(width, height)
     property vector3d tint: Qt.vector3d(0.22, 0.74, 0.97)
     property real progress: 0
 

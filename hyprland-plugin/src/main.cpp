@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <hyprland/src/debug/log/Logger.hpp>
 #include <hyprland/src/desktop/view/WLSurface.hpp>
@@ -31,11 +32,12 @@ static constexpr const char* SOCKET_NAME  = "caret-trails.sock";
 static CHyprSignalListener g_tickListener;
 
 static std::atomic<bool>   g_running{false};
-static std::atomic<int>    g_clientFd{-1};
 static int                 g_listenFd{-1};
 static std::thread         g_acceptThread;
-static std::mutex          g_clientMutex;
+static std::mutex          g_clientsMutex;
+static std::vector<int>    g_clients;
 static std::string         g_socketPath;
+static constexpr size_t    MAX_CLIENTS = 8;
 
 struct SLastState {
     bool active = false;
@@ -53,14 +55,14 @@ static std::string socketPath() {
 }
 
 static void sendLine(const char* data, size_t len) {
-    const auto fd = g_clientFd.load();
-    if (fd < 0)
-        return;
-
-    std::lock_guard<std::mutex> lg(g_clientMutex);
-    if (send(fd, data, len, MSG_NOSIGNAL) < 0) {
-        close(fd);
-        g_clientFd = -1;
+    std::lock_guard<std::mutex> lg(g_clientsMutex);
+    for (auto it = g_clients.begin(); it != g_clients.end();) {
+        if (send(*it, data, len, MSG_NOSIGNAL) < 0) {
+            close(*it);
+            it = g_clients.erase(it);
+        } else {
+            ++it;
+        }
     }
 }
 
@@ -84,17 +86,22 @@ static void acceptLoop() {
         if (cfd < 0)
             continue;
 
+        bool accepted = false;
         {
-            std::lock_guard<std::mutex> lg(g_clientMutex);
-
-            const auto old = g_clientFd.exchange(cfd);
-            if (old >= 0)
-                close(old);
+            std::lock_guard<std::mutex> lg(g_clientsMutex);
+            if (g_clients.size() < MAX_CLIENTS) {
+                g_clients.push_back(cfd);
+                accepted = true;
+            }
+        }
+        if (!accepted) {
+            close(cfd);
+            continue;
         }
 
         char hello[128];
         int  helloLen = snprintf(hello, sizeof(hello), "{\"protocol\":%d,\"plugin\":\"%s\",\"status\":\"ready\"}\n", PROTOCOL_VERSION, PLUGIN_NAME);
-        sendLine(hello, helloLen);
+        send(cfd, hello, helloLen, MSG_NOSIGNAL);
         pushState(g_lastState);
     }
 }
@@ -205,10 +212,10 @@ APICALL EXPORT void pluginExit() {
         g_acceptThread.join();
 
     {
-        std::lock_guard<std::mutex> lg(g_clientMutex);
-        const auto                  fd = g_clientFd.exchange(-1);
-        if (fd >= 0)
+        std::lock_guard<std::mutex> lg(g_clientsMutex);
+        for (const auto fd : g_clients)
             close(fd);
+        g_clients.clear();
     }
 
     if (!g_socketPath.empty())

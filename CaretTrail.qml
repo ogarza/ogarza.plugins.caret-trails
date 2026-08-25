@@ -103,7 +103,12 @@ Item {
     Timer {
         id: retryTimer
         interval: 2000
-        onTriggered: socket.connected = true
+        // Toggle so an already-true `connected` still re-fires a connection
+        // attempt (e.g. shell started before the native plugin did).
+        onTriggered: {
+            socket.connected = false
+            socket.connected = true
+        }
     }
 
     Socket {
