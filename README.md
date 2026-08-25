@@ -52,6 +52,11 @@ omarchy pkg add cmake
 everything else above ships with the base install.)
 
 ```bash
+# 0) ONE TIME: build & install Hyprland plugin headers matching your running
+#    compositor. Asks for your password; exits quickly when already current.
+#    `hyprpm add` refuses to run until this has succeeded once.
+hyprpm update
+
 # 1) Shell side (overlay + receiver)
 omarchy plugin add https://github.com/ogarza/ogarza.plugins.caret-trails --enable
 
@@ -60,7 +65,30 @@ hyprpm add https://github.com/ogarza/ogarza.plugins.caret-trails
 hyprpm enable caret-tracker
 ```
 
-Or in one step:
+> Why step 0: `hyprpm add` compares its cached headers ABI against the running
+> Hyprland *before* it does anything else. On a system where no plugin was ever
+> built, there are no cached headers yet, so the add aborts with
+> `✖ Headers outdated, please run hyprpm update.` and the subsequent `enable`
+> fails with `Couldn't enable plugin (missing?)`. Running `hyprpm update` once
+> fixes both.
+
+## Troubleshooting
+
+Errors you may see, what they mean, and what to do:
+
+| Error | Meaning | Fix |
+|---|---|---|
+| `✖ Headers outdated, please run hyprpm update.` (from `hyprpm add`) | Cached plugin headers missing (fresh install) or stale (Hyprland was updated). Nothing was added. | Run `hyprpm update`, then repeat `hyprpm add …`. |
+| `✖ Couldn't enable plugin (missing?)` (from `hyprpm enable`) | A previous step (`add` or its build) failed, so there is nothing to enable. This message is only the symptom. | Scroll up for the real error, fix it, then re-run `hyprpm enable caret-tracker`. |
+| `Plugin has a malformed manifest: bad commit pin` (from `hyprpm add`) | Your local copy of the repo predates the fixed `hyprpm.toml`, whose `commit_pins` contained a placeholder instead of a real commit hash. | `hyprpm remove https://github.com/ogarza/ogarza.plugins.caret-trails`, pull/update the repo, and re-add. Fixed as of commit `558d80d`. |
+| Trails stop working after `omarchy update` | Hyprland was bumped to a newer commit than any `commit_pins` entry; the old binary can't load. | `hyprpm update && hyprpm reload`. If the build fails on the new version, see the Updating table below. |
+
+Note: seeing `✖ No repos to update.` inside `hyprpm update` output right after a
+failed `hyprpm add` is normal — the failed add never registered the repo, so
+there is genuinely nothing to update. The header half of the update still ran,
+which is the part you needed.
+
+Or in one step (does the header bootstrap from step 0 for you):
 
 ```bash
 git clone https://github.com/ogarza/ogarza.plugins.caret-trails && ./ogarza.plugins.caret-trails/scripts/install.sh
@@ -87,6 +115,13 @@ loaded but reports `Status.Unavailable`; a wire-protocol mismatch reports
 | New Hyprland release, plugin broken | wait for/pull a fix; `commit_pins` in `hyprpm.toml` keeps known-good pairs |
 
 Useful: `hyprpm list`, `hyprpm reload`, `omarchy restart shell`.
+
+Maintainers: when a pin is needed for a new Hyprland version, append a
+`["<hyprland-commit>", "<plugin-commit>"]` pair to `commit_pins` — both must be
+full 40-char hex hashes (hyprpm hard-fails the whole `add` on anything else,
+e.g. a placeholder string). Get them with `hyprctl version` (running Hyprland
+commit) and `git rev-parse HEAD` (this repo). Users on other versions simply
+skip pinning and build HEAD.
 
 ## Removing
 

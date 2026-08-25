@@ -11,6 +11,11 @@ fi
 echo "==> Installing Omarchy shell plugin"
 omarchy plugin add "$REPO_URL" --enable
 
+echo "==> Ensuring Hyprland plugin headers are installed (may ask for your password)"
+# hyprpm add refuses to run until headers exist and match the running Hyprland
+# ("Headers outdated, please run hyprpm update."), so bootstrap them first.
+hyprpm update
+
 echo "==> Adding native Hyprland sensor via hyprpm"
 hyprpm add "$REPO_URL"
 hyprpm enable caret-tracker

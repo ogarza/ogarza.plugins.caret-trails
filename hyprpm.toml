@@ -2,7 +2,8 @@
 name = "ogarza.plugins.caret-trails"
 authors = ["ogarza"]
 commit_pins = [
-    ["efb50993780079460b0cbed1363e2166a2de1d9f", "REPLACE_WITH_YOUR_PLUGIN_COMMIT_FOR_HYPRLAND_0.56.2"],
+    # Hyprland 0.56.2 -> plugin commit known to build against it
+    ["efb50993780079460b0cbed1363e2166a2de1d9f", "558d80d07c5b474dcf1fce8b4b5fc0578cb32ee6"],
 ]
 
 [caret-tracker]
