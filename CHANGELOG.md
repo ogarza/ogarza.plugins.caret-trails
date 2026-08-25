@@ -23,6 +23,10 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions are
   the previous one, so running `socat` for debugging kicked the shell overlay
   offline (and the overlay's reconnect then kicked `socat`). The server now
   broadcasts to up to 8 concurrent subscribers and prunes dead peers.
+- **Client sockets were blocking**: sends run on the compositor's tick thread,
+  so a stalled reader could in principle freeze Hyprland once its socket buffer
+  filled. Clients are now non-blocking: stalled readers skip updates, broken or
+  too-slow ones are dropped.
 - **Reconnect could wedge forever**: if the shell started before the native
   plugin created its socket, the retry timer set an already-`true`
   `Socket.connected` and no new attempt ever fired. The timer now toggles the

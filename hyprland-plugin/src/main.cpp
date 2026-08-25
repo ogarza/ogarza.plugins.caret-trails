@@ -54,10 +54,16 @@ static std::string socketPath() {
     return (xdg ? std::string(xdg) : std::string("/tmp")) + "/" + SOCKET_NAME;
 }
 
+// Clients are non-blocking: a stalled reader gets skipped (EAGAIN) instead of
+// ever blocking the compositor's tick thread; a genuinely broken or too-slow
+// one (short write / real error) is dropped. Bounded by MAX_CLIENTS.
 static void sendLine(const char* data, size_t len) {
     std::lock_guard<std::mutex> lg(g_clientsMutex);
     for (auto it = g_clients.begin(); it != g_clients.end();) {
-        if (send(*it, data, len, MSG_NOSIGNAL) < 0) {
+        const auto n = send(*it, data, len, MSG_NOSIGNAL);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            ++it;
+        } else if (n <= 0 || static_cast<size_t>(n) != len) {
             close(*it);
             it = g_clients.erase(it);
         } else {
@@ -82,7 +88,7 @@ static void acceptLoop() {
         if (poll(&pfd, 1, 200) <= 0)
             continue;
 
-        int cfd = accept4(g_listenFd, nullptr, nullptr, SOCK_CLOEXEC);
+        int cfd = accept4(g_listenFd, nullptr, nullptr, SOCK_NONBLOCK | SOCK_CLOEXEC);
         if (cfd < 0)
             continue;
 
