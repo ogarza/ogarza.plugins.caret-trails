@@ -1,0 +1,15 @@
+[repository]
+name = "ogarza.plugins.caret-trails"
+authors = ["ogarza"]
+commit_pins = [
+    ["efb50993780079460b0cbed1363e2166a2de1d9f", "REPLACE_WITH_YOUR_PLUGIN_COMMIT_FOR_HYPRLAND_0.56.2"],
+]
+
+[caret-tracker]
+description = "Global text caret position sensor: publishes the focused text-input-v3 cursor rectangle in global coordinates over a local unix socket."
+authors = ["ogarza"]
+output = "hyprland-plugin/build/libcaret-tracker.so"
+build = [
+    "cmake -S hyprland-plugin -B hyprland-plugin/build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build hyprland-plugin/build",
+]

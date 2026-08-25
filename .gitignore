@@ -1,0 +1,4 @@
+hyprland-plugin/build/
+*.so
+*.o
+.direnv/

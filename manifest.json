@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "ogarza.caret-trails",
+  "name": "Caret Trails",
+  "version": "0.1.0",
+  "author": "ogarza",
+  "description": "Particle trail that follows the text caret of the focused application.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "CaretTrail.qml"
+  }
+}
